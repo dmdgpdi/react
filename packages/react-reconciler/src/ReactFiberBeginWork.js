@@ -2124,8 +2124,11 @@ function updateSuspenseComponent(
     }
   }
 
-  let showFallback = false;
-  const didSuspend = (workInProgress.flags & DidCapture) !== NoFlags;
+  let showFallback = false; // fallback을 보여줘야 하는지 확인.
+  const didSuspend = (workInProgress.flags & DidCapture) !== NoFlags; 
+  // 이미 이전에 'Suspend'중인지 확인.
+
+  // 이전에 Suspend중이거나, shouldRemainOnFallback 즉 fallback을 보여줘야 한다면.
   if (
     didSuspend ||
     shouldRemainOnFallback(current, workInProgress, renderLanes)
@@ -2133,7 +2136,7 @@ function updateSuspenseComponent(
     // Something in this boundary's subtree already suspended. Switch to
     // rendering the fallback children.
     showFallback = true;
-    workInProgress.flags &= ~DidCapture;
+    workInProgress.flags &= ~DidCapture; // DidCapture falg를 없애서 확인해본다.
   }
 
   // Check if the primary children spawned a deferred task (useDeferredValue)
@@ -3886,6 +3889,7 @@ function beginWork(
     const oldProps = current.memoizedProps;
     const newProps = workInProgress.pendingProps;
 
+    // 새롭게 Props가 바뀌거나,hasLegacyContextChanged되었다면 didReceiveUpdate를 true로 바꾼다.
     if (
       oldProps !== newProps ||
       hasLegacyContextChanged() ||
@@ -4012,7 +4016,7 @@ function beginWork(
       return updateHostComponent(current, workInProgress, renderLanes);
     case HostText:
       return updateHostText(current, workInProgress);
-    case SuspenseComponent:
+    case SuspenseComponent: // Suspense 
       return updateSuspenseComponent(current, workInProgress, renderLanes);
     case HostPortal:
       return updatePortalComponent(current, workInProgress, renderLanes);

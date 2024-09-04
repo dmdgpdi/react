@@ -2362,12 +2362,14 @@ function renderRootConcurrent(root: FiberRoot, lanes: Lanes) {
   }
 }
 
+// Concurrent하게 work를 loop로 실행하는 함수
 /** @noinline */
-function workLoopConcurrent() {
+function workLoopConcurrent() { 
   // Perform work until Scheduler asks us to yield
+  // workInProgress가 null이 아니고, commit phase에 넘겨줘야 되는 것이 아니라면
   while (workInProgress !== null && !shouldYield()) {
     // $FlowFixMe[incompatible-call] found when upgrading Flow
-    performUnitOfWork(workInProgress);
+    performUnitOfWork(workInProgress); // 계속 작업 수행
   }
 }
 
@@ -2378,6 +2380,7 @@ function performUnitOfWork(unitOfWork: Fiber): void {
   const current = unitOfWork.alternate;
 
   let next;
+
   if (enableProfilerTimer && (unitOfWork.mode & ProfileMode) !== NoMode) {
     startProfilerTimer(unitOfWork);
     if (__DEV__) {
@@ -2402,6 +2405,7 @@ function performUnitOfWork(unitOfWork: Fiber): void {
         entangledRenderLanes,
       );
     } else {
+      // 일을 시작한다.
       next = beginWork(current, unitOfWork, entangledRenderLanes);
     }
   }
