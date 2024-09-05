@@ -100,9 +100,9 @@ export function pushPrimaryTreeSuspenseHandler(handler: Fiber): void {
 }
 
 export function pushFallbackTreeSuspenseHandler(fiber: Fiber): void {
-  // We're about to render the fallback. If something in the fallback suspends,
-  // it's akin to throwing inside of a `catch` block. This boundary should not
-  // capture. Reuse the existing handler on the stack.
+  // 이제 곧 폴백을 렌더링하려고 합니다.
+  // 폴백의 무언가가 일시 중단되면 '캐치' 블록 안에 던지는 것과 비슷합니다.
+  // 이 경계는 캡처해서는 안 됩니다. 스택의 기존 핸들러를 재사용하세요.
   reuseSuspenseHandlerOnStack(fiber);
 }
 

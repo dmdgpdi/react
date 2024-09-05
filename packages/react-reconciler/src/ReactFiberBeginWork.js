@@ -2125,7 +2125,7 @@ function updateSuspenseComponent(
   }
 
   let showFallback = false; // fallback을 보여줘야 하는지 확인.
-  const didSuspend = (workInProgress.flags & DidCapture) !== NoFlags; 
+  const didSuspend = (workInProgress.flags & DidCapture) !== NoFlags;
   // 이미 이전에 'Suspend'중인지 확인.
 
   // 이전에 Suspend중이거나, shouldRemainOnFallback 즉 fallback을 보여줘야 한다면.
@@ -2166,6 +2166,12 @@ function updateSuspenseComponent(
   // and switch to a different tree. Like a try/catch block. So we have to track
   // which branch we're currently rendering. Ideally we would model this using
   // a stack.
+
+  // 셋째, 이 모든 것을 제쳐두더라도 Suspense는 먼저 하나의 트리를 렌더링하고 실패하면
+  // 다시 렌더링하고 다른 트리로 전환한다는 점에서 오류 경계와 비슷합니다.
+  // try/catch 블록처럼요.
+  // 따라서 현재 렌더링 중인 브랜치를 추적해야 합니다. 이상적으로는 스택을 사용하여 스택을 사용합니다.
+
   if (current === null) {
     // Initial mount
 
@@ -2287,6 +2293,7 @@ function updateSuspenseComponent(
     }
   } else {
     // This is an update.
+    // showFallback하지 않아도 된다!
 
     // Special path for hydration
     const prevState: null | SuspenseState = current.memoizedState;
@@ -2307,6 +2314,7 @@ function updateSuspenseComponent(
     }
 
     if (showFallback) {
+      // 다시 fallback을 보여줘야한다면
       pushFallbackTreeSuspenseHandler(workInProgress);
 
       const nextFallbackChildren = nextProps.fallback;
@@ -2401,6 +2409,8 @@ function mountSuspensePrimaryChildren(
   return primaryChildFragment;
 }
 
+// mountSuspenseFallbackChildren은
+// 실제로 Fallback UI와 Child Component를 모두 렌더링합니다.
 function mountSuspenseFallbackChildren(
   workInProgress: Fiber,
   primaryChildren: $FlowFixMe,
@@ -2446,11 +2456,16 @@ function mountSuspenseFallbackChildren(
       null,
     );
   } else {
+    // Child Component는 mountWorkInProgressOffscreenFiber를 사용해서 렌더링
     primaryChildFragment = mountWorkInProgressOffscreenFiber(
-      primaryChildProps,
+      primaryChildProps, //  primaryChildProps의 mode 속성이 ‘hidden’으로 설정
+      // 해당 노드는 display:none!important가 걸린 div로 업데이트되어 DOM에 나타나지 않습니다.
+      // 백그라운드에서 해당 컴포넌트가 렌더링되어
+      // 실제 Data fetching과 reconcilation 대상이 되는 것입니다.
       mode,
       NoLanes,
     );
+    // Fallback UI는 createFiberFromFragment를 사용해서 렌더링
     fallbackChildFragment = createFiberFromFragment(
       fallbackChildren,
       mode,
@@ -4016,7 +4031,7 @@ function beginWork(
       return updateHostComponent(current, workInProgress, renderLanes);
     case HostText:
       return updateHostText(current, workInProgress);
-    case SuspenseComponent: // Suspense 
+    case SuspenseComponent: // Suspense
       return updateSuspenseComponent(current, workInProgress, renderLanes);
     case HostPortal:
       return updatePortalComponent(current, workInProgress, renderLanes);
