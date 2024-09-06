@@ -2133,8 +2133,8 @@ function updateSuspenseComponent(
     didSuspend ||
     shouldRemainOnFallback(current, workInProgress, renderLanes)
   ) {
-    // Something in this boundary's subtree already suspended. Switch to
-    // rendering the fallback children.
+    // 이 경계의 하위 트리에 있는 무언가가 이미 일시 중단되었습니다. 폴백 자식 렌더링으로
+    // 전환합니다.
     showFallback = true;
     workInProgress.flags &= ~DidCapture; // DidCapture falg를 없애서 확인해본다.
   }
@@ -2212,6 +2212,7 @@ function updateSuspenseComponent(
       pushFallbackTreeSuspenseHandler(workInProgress);
 
       const fallbackFragment = mountSuspenseFallbackChildren(
+        // mount both primary children(content) and fallback for us, but returns the fallback.
         workInProgress,
         nextPrimaryChildren,
         nextFallbackChildren,

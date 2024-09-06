@@ -601,6 +601,7 @@ export function requestUpdateLane(fiber: Fiber): Lane {
   // Special cases
   const mode = fiber.mode;
   if (!disableLegacyMode && (mode & ConcurrentMode) === NoMode) {
+    // concurrent 모드를 지원하지 않는다면
     return (SyncLane: Lane);
   } else if (
     (executionContext & RenderContext) !== NoContext &&
@@ -2364,7 +2365,7 @@ function renderRootConcurrent(root: FiberRoot, lanes: Lanes) {
 
 // Concurrent하게 work를 loop로 실행하는 함수
 /** @noinline */
-function workLoopConcurrent() { 
+function workLoopConcurrent() {
   // Perform work until Scheduler asks us to yield
   // workInProgress가 null이 아니고, commit phase에 넘겨줘야 되는 것이 아니라면
   while (workInProgress !== null && !shouldYield()) {
