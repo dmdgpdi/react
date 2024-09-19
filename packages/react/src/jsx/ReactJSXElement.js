@@ -387,6 +387,18 @@ export function jsxProd(type, config, maybeKey) {
   // but as an intermediary step, we will use jsxDEV for everything except
   // <div {...props} key="Hi" />, because we aren't currently able to tell if
   // key is explicitly declared to be undefined or not.
+
+  /**
+   *
+   * 현재 키는 소품으로 펼쳐서 사용할 수 있습니다. 이로 인해 잠재적인키가 명시적으로 선언된 경우
+   * (예: <div {...props} key=“Hi” /> 또는 <div key=“Hi” {...props} />) 문제가 발생할 수 있습니다.
+   * 키 스프레드를 더 이상 사용하지 않으려 하지만 중간 단계로 <div {...props} key=“Hi” />를 제외한 모든 항목에
+   * jsxDEV를 사용할 것입니다(현재 확인할 수 없으므로).
+   * 키가 명시적으로 정의되지 않은 것으로 선언되었는지 여부를 알 수 없기 때문입니다.
+   */
+
+  // key가 명시적으로 전달된 경우 처리
+  // JSX에서 <div {...props} key="Hi" />와 같이 key가 스프레드될 때 발생할 수 있는 문제를 처리함.
   if (maybeKey !== undefined) {
     if (__DEV__) {
       checkKeyStringCoercion(maybeKey);
@@ -394,6 +406,7 @@ export function jsxProd(type, config, maybeKey) {
     key = '' + maybeKey;
   }
 
+  // config 객체에 유효한 key가 있는지 확인하고, key가 있으면 이를 할당
   if (hasValidKey(config)) {
     if (__DEV__) {
       checkKeyStringCoercion(config.key);
@@ -401,35 +414,38 @@ export function jsxProd(type, config, maybeKey) {
     key = '' + config.key;
   }
 
+  // config 객체에 유효한 ref가 있는지 확인하고 처리
   if (hasValidRef(config)) {
     if (!enableRefAsProp) {
-      ref = config.ref;
+      ref = config.ref; // ref를 할당
       if (!disableStringRefs) {
+        // 문자열 ref를 사용하는 경우 변환 (필요한 경우)
         ref = coerceStringRef(ref, getOwner(), type);
       }
     }
   }
 
   let props;
+
+  // 특정 조건에서 props 객체를 재사용할 수 있음 (key나 ref가 없을 때)
   if (
     (enableFastJSXWithoutStringRefs ||
       (enableRefAsProp && !('ref' in config))) &&
     !('key' in config)
   ) {
-    // If key was not spread in, we can reuse the original props object. This
-    // only works for `jsx`, not `createElement`, because `jsx` is a compiler
-    // target and the compiler always passes a new object. For `createElement`,
-    // we can't assume a new object is passed every time because it can be
-    // called manually.
-    //
-    // Spreading key is a warning in dev. In a future release, we will not
-    // remove a spread key from the props object. (But we'll still warn.) We'll
-    // always pass the object straight through.
+    // If key was not spread in, we can reuse the original props object.
+    // 이는 `jsx`가 컴파일러 대상이고 컴파일러가 항상 새 객체를 전달하기 때문에
+    // `createElement`가 아닌 `jsx`에서만 작동합니다.
+    // createElement`의 경우 수동으로 호출할 수 있기 때문에 매번 새 객체가 전달된다고 가정할 수 없습니다.
+
+    // config 객체를 그대로 props로 사용
     props = config;
   } else {
     // We need to remove reserved props (key, prop, ref). Create a fresh props
     // object and copy over all the non-reserved props. We don't use `delete`
     // because in V8 it will deopt the object to dictionary mode.
+
+    // key나 ref를 제외한 나머지 속성들을 새로운 props 객체에 복사
     props = {};
     for (const propName in config) {
       // Skip over reserved prop names
@@ -443,8 +459,9 @@ export function jsxProd(type, config, maybeKey) {
     }
   }
 
+  // type에 defaultProps가 정의되어 있으면 props에 병합
   if (!disableDefaultPropsExceptForClasses) {
-    // Resolve default props
+    // 기본 props 처리
     if (type && type.defaultProps) {
       const defaultProps = type.defaultProps;
       for (const propName in defaultProps) {
