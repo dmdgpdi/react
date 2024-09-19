@@ -699,9 +699,9 @@ export function peekDeferredLane(): Lane {
 }
 
 export function scheduleUpdateOnFiber(
-  root: FiberRoot,
-  fiber: Fiber,
-  lane: Lane,
+  root: FiberRoot, // 업데이트가 발생하는 루트
+  fiber: Fiber, // 업데이트가 적용될 fiber
+  lane: Lane, // 업데이트가 적용될 lane
 ) {
   if (__DEV__) {
     if (isRunningInsertionEffect) {
@@ -715,17 +715,15 @@ export function scheduleUpdateOnFiber(
     }
   }
 
-  // Check if the work loop is currently suspended and waiting for data to
-  // finish loading.
+  // 현재 작업 루프가 데이터 로딩을 기다리며 중단된 상태인지 확인
   if (
-    // Suspended render phase
+    // 렌더링 단계에서 중단된 경우
     (root === workInProgressRoot &&
       workInProgressSuspendedReason === SuspendedOnData) ||
-    // Suspended commit phase
+    // 커밋 단계에서 중단된 경우
     root.cancelPendingCommit !== null
   ) {
-    // The incoming update might unblock the current render. Interrupt the
-    // current attempt and restart from the top.
+    // 새로운 업데이트가 현재 렌더를 중단할 수 있으므로, 현재 작업을 중단하고 상위에서 다시 시작
     prepareFreshStack(root, NoLanes);
     markRootSuspended(
       root,
@@ -734,9 +732,10 @@ export function scheduleUpdateOnFiber(
     );
   }
 
-  // Mark that the root has a pending update.
+  // 루트에 대기 중인 업데이트가 있음을 표시
   markRootUpdated(root, lane);
 
+  // 렌더링 단계에서 업데이트가 발생했는지 확인
   if (
     (executionContext & RenderContext) !== NoLanes &&
     root === workInProgressRoot
@@ -746,22 +745,24 @@ export function scheduleUpdateOnFiber(
     // hook updates, which are handled differently and don't reach this
     // function), but there are some internal React features that use this as
     // an implementation detail, like selective hydration.
+
+    // 렌더링 단계에서 발생한 업데이트로, 사용자 코드에서 발생한 것이면 오류
     warnAboutRenderPhaseUpdatesInDEV(fiber);
 
-    // Track lanes that were updated during the render phase
+    // 렌더링 단계에서 업데이트된 lane들을 기록
     workInProgressRootRenderPhaseUpdatedLanes = mergeLanes(
       workInProgressRootRenderPhaseUpdatedLanes,
       lane,
     );
   } else {
-    // This is a normal update, scheduled from outside the render phase. For
-    // example, during an input event.
+    // 정상적인 업데이트로, 렌더링 단계 외부에서 발생한 경우 처리
     if (enableUpdaterTracking) {
       if (isDevToolsPresent) {
         addFiberToLanesMap(root, fiber, lane);
       }
     }
 
+    // 업데이트가 act()로 감싸져 있지 않은 경우 경고 출력
     warnIfUpdatesNotWrappedWithActDEV(fiber);
 
     if (enableTransitionTracing) {
@@ -778,6 +779,7 @@ export function scheduleUpdateOnFiber(
     }
 
     if (root === workInProgressRoot) {
+      // 렌더 중인 트리에 업데이트가 들어온 경우, 교차 업데이트가 발생했음을 기록
       // Received an update to a tree that's in the middle of rendering. Mark
       // that there was an interleaved update work on this root.
       if ((executionContext & RenderContext) === NoContext) {
@@ -787,6 +789,7 @@ export function scheduleUpdateOnFiber(
         );
       }
       if (workInProgressRootExitStatus === RootSuspendedWithDelay) {
+        // 루트가 이미 지연 상태로 중단된 경우, 새로운 업데이트가 있으므로 바로 처리
         // The root already suspended with a delay, which means this render
         // definitely won't finish. Since we have a new update, let's mark it as
         // suspended now, right before marking the incoming update. This has the
@@ -801,7 +804,10 @@ export function scheduleUpdateOnFiber(
       }
     }
 
+    // 루트가 스케줄링되었는지 확인
     ensureRootIsScheduled(root);
+
+    // 동기 업데이트인 경우 바로 처리
     if (
       lane === SyncLane &&
       executionContext === NoContext &&
@@ -816,6 +822,7 @@ export function scheduleUpdateOnFiber(
         // scheduleCallbackForFiber to preserve the ability to schedule a callback
         // without immediately flushing it. We only do this for user-initiated
         // updates, to preserve historical behavior of legacy mode.
+        // 동기 작업을 바로 플러시
         resetRenderTimer();
         flushSyncWorkOnLegacyRootsOnly();
       }
@@ -909,6 +916,7 @@ export function performConcurrentWorkOnRoot(
         // The render unwound without completing the tree. This happens in special
         // cases where need to exit the current render without producing a
         // consistent tree or committing.
+
         markRootSuspended(root, lanes, NoLane);
       } else {
         // The render completed.

@@ -266,7 +266,7 @@ let currentlyRenderingFiber: Fiber = (null: any);
 // work-in-progress hook list is a new list that will be added to the
 // work-in-progress fiber.
 let currentHook: Hook | null = null;
-let workInProgressHook: Hook | null = null;
+let workInProgressHook: Hook | null = null; // 전역변수로 관리.
 
 // Whether an update was scheduled at any point during the render phase. This
 // does not get reset if we do another render pass; only when we're completely
@@ -497,10 +497,17 @@ function areHookInputsEqual(
   return true;
 }
 
+// 훅 주입은 reconciler/renderWithHooks()에서 이루어집니다.
+// 함수 이름에서 느껴지시나요? 컴포넌트 호출 또한 여기서 합니다.
 export function renderWithHooks<Props, SecondArg>(
   current: Fiber | null,
   workInProgress: Fiber,
   Component: (p: Props, arg: SecondArg) => any,
+  /**
+   * Component는 fiber의 type에서 꺼낸 온 것인데 함수형 컴포넌트의 경우 개발자가 작성한 함수가 type이 됩니다.
+   * 컴포넌트를 호출할 때 해당 컴포넌트가 마운트되어야 한다면 전역변수 firstWorkInProgressHook에 훅 리스트가 생성되어 저장됩니다.
+   * 이 변수를 fiber의 memoizedState에 저장해 놓음으로써 훅을 컴포넌트와 매핑시켜 줍니다.
+   */
   props: Props,
   secondArg: SecondArg,
   nextRenderLanes: Lanes,
@@ -522,25 +529,41 @@ export function renderWithHooks<Props, SecondArg>(
   }
 
   workInProgress.memoizedState = null;
+  /**
+   * memoizedState는 컴포넌트의 훅 상태를 저장하는 곳입니다.
+   * 이 값을 null로 설정함으로써, 현재 렌더링 작업에서 훅 상태를 초기화합니다.
+   * 즉, 현재 작업이 새롭게 시작되므로 이전의 훅 상태를 지우고 새로운 상태를 설정할 준비를 합니다
+   */
   workInProgress.updateQueue = null;
+  /**
+   * updateQueue는 컴포넌트의 업데이트 요청을 저장하는 큐입니다.
+   * null로 설정함으로써, 현재 렌더링 작업에서 업데이트 큐를 초기화합니다.
+   * 이는 이전 업데이트 요청을 무시하고 새롭게 시작할 준비를 의미합니다.
+   */
   workInProgress.lanes = NoLanes;
+  /**
+   * lanes는 현재 렌더링 작업이 처리할 렌더링 우선순위나 작업을 나타냅니다.
+   * NoLanes로 설정함으로써, 현재 렌더링 작업이 처리할 렌더링 우선순위가 없음을 나타냅니다.
+   * 즉, 현재 작업이 별도의 우선순위 없이 진행될 것을 의미합니다.
+   */
 
-  // The following should have already been reset
+  // 현재 훅 상태를 초기화합니다.
   // currentHook = null;
   // workInProgressHook = null;
 
+  // 렌더링 단계에서 업데이트가 스케줄된 상태인지 확인합니다.
   // didScheduleRenderPhaseUpdate = false;
   // localIdCounter = 0;
   // thenableIndexCounter = 0;
   // thenableState = null;
 
-  // TODO Warn if no hooks are used at all during mount, then some are used during update.
-  // Currently we will identify the update render as a mount because memoizedState === null.
-  // This is tricky because it's valid for certain types of components (e.g. React.lazy)
+  // TODO: 마운트 시 전혀 훅을 사용하지 않고, 업데이트 시 훅을 사용하는 경우 경고합니다.
+  // 현재는 memoizedState가 null일 때 업데이트 렌더를 마운트로 식별합니다.
+  // 이는 React.lazy와 같은 특정 유형의 컴포넌트에서는 유효할 수 있습니다.
 
-  // Using memoizedState to differentiate between mount/update only works if at least one stateful hook is used.
-  // Non-stateful hooks (e.g. context) don't get added to memoizedState,
-  // so memoizedState would be null during updates and mounts.
+  // memoizedState를 사용하여 마운트/업데이트를 구분하는 것은 적어도 하나의 상태 훅이 사용되는 경우에만 작동합니다.
+  // 상태 비관련 훅 (예: context)은 memoizedState에 추가되지 않으므로, memoizedState는 업데이트와 마운트 동안 null이 됩니다.
+
   if (__DEV__) {
     if (current !== null && current.memoizedState !== null) {
       ReactSharedInternals.H = HooksDispatcherOnUpdateInDEV;
@@ -555,38 +578,32 @@ export function renderWithHooks<Props, SecondArg>(
       ReactSharedInternals.H = HooksDispatcherOnMountInDEV;
     }
   } else {
+    // memoizedState를 사용하여 마운트/업데이트를 구분하는 것은 적어도 하나의 상태 훅이 사용되는 경우에만 작동합니다.
+    // 상태 비관련 훅 (예: context)은 memoizedState에 추가되지 않으므로, memoizedState는 업데이트와 마운트 동안 null이 됩니다.
+    // current null이거나 훅 상태를 저장하는 곳이 null 이면 mount한다.
     ReactSharedInternals.H =
       current === null || current.memoizedState === null
         ? HooksDispatcherOnMount
         : HooksDispatcherOnUpdate;
   }
 
-  // In Strict Mode, during development, user functions are double invoked to
-  // help detect side effects. The logic for how this is implemented for in
-  // hook components is a bit complex so let's break it down.
+  // Strict Mode에서, 개발 중에는 사용자 함수를 두 번 호출하여 사이드 이펙트를 감지합니다.
+  // 이 로직은 훅 컴포넌트에 대해 조금 복잡하므로, 이를 분리하여 설명합니다.
   //
-  // We will invoke the entire component function twice. However, during the
-  // second invocation of the component, the hook state from the first
-  // invocation will be reused. That means things like `useMemo` functions won't
-  // run again, because the deps will match and the memoized result will
-  // be reused.
+  // 전체 컴포넌트 함수를 두 번 호출합니다. 그러나 두 번째 호출 중에는 첫 번째 호출의 훅 상태가 재사용됩니다.
+  // 즉, `useMemo` 함수와 같은 것들은 다시 실행되지 않으며, 종속성 일치로 메모이즈된 결과가 재사용됩니다.
   //
-  // We want memoized functions to run twice, too, so account for this, user
-  // functions are double invoked during the *first* invocation of the component
-  // function, and are *not* double invoked during the second incovation:
+  // 메모이즈된 함수도 두 번 실행되도록 해야 하므로, 사용자 함수는 컴포넌트 함수의 *첫 번째* 호출 동안 두 번 호출됩니다.
+  // 두 번째 호출 동안에는 두 번 호출되지 않습니다:
   //
-  // - First execution of component function: user functions are double invoked
-  // - Second execution of component function (in Strict Mode, during
-  //   development): user functions are not double invoked.
+  // - 첫 번째 실행: 사용자 함수가 두 번 호출됩니다.
+  // - 두 번째 실행 (Strict Mode에서, 개발 중): 사용자 함수는 두 번 호출되지 않습니다.
   //
-  // This is intentional for a few reasons; most importantly, it's because of
-  // how `use` works when something suspends: it reuses the promise that was
-  // passed during the first attempt. This is itself a form of memoization.
-  // We need to be able to memoize the reactive inputs to the `use` call using
-  // a hook (i.e. `useMemo`), which means, the reactive inputs to `use` must
-  // come from the same component invocation as the output.
+  // 이는 몇 가지 이유로 의도된 동작입니다. 가장 중요한 이유는 `use`가 어떤 것이 일시 중지될 때 작동하는 방식 때문입니다.
+  // 첫 번째 시도 중에 전달된 프로미스를 재사용하며, 이는 자체적으로 메모이제이션의 한 형태입니다.
+  // `use` 호출의 반응 입력을 훅을 사용하여 메모이즈할 수 있어야 하므로, `use`의 반응 입력은 출력과 동일한 컴포넌트 호출에서 나와야 합니다.
   //
-  // There are plenty of tests to ensure this behavior is correct.
+  // 이 동작이 올바른지 확인하는 테스트가 많이 있습니다.
   const shouldDoubleRenderDEV =
     __DEV__ &&
     debugRenderPhaseSideEffectsForStrictMode &&
@@ -598,10 +615,9 @@ export function renderWithHooks<Props, SecondArg>(
     : Component(props, secondArg);
   shouldDoubleInvokeUserFnsInHooksDEV = false;
 
-  // Check if there was a render phase update
+  // 렌더링 단계 업데이트가 있었는지 확인
   if (didScheduleRenderPhaseUpdateDuringThisPass) {
-    // Keep rendering until the component stabilizes (there are no more render
-    // phase updates).
+    // 컴포넌트가 안정화될 때까지 렌더링을 계속합니다(더 이상 렌더링 단계 업데이트가 없음).
     children = renderWithHooksAgain(
       workInProgress,
       Component,
@@ -965,24 +981,37 @@ export function resetHooksOnUnwind(workInProgress: Fiber): void {
   thenableState = null;
 }
 
+/**
+ * 현재 렌더링 중인 훅을 새로 생성하여 반환합니다.
+ *
+ * 새 훅은 현재 렌더링 중인 컴포넌트의 훅 목록에 추가됩니다.
+ *
+ * @returns 현재 렌더링 중인 훅을 반환합니다.
+ */
 function mountWorkInProgressHook(): Hook {
+  // 새로운 훅 객체를 생성합니다. 초기 상태는 모두 null로 설정됩니다.
   const hook: Hook = {
-    memoizedState: null,
-
-    baseState: null,
-    baseQueue: null,
-    queue: null,
-
-    next: null,
+    memoizedState: null, // 이전 렌더링에서 기억된 상태, memoziedState 마지막에 얻은 state 값
+    baseState: null, // 기본 상태  // 업데이트 구현체에서 설명
+    baseQueue: null, // 기본 큐
+    queue: null, // 큐
+    next: null, // 다음 hook을 가리키는 pointer(hook은 linked list에 저장)
   };
 
+  // workInProgressHook이 null인지 확인하여 현재 렌더링 중인 훅 목록의 첫 번째 훅인지 확인합니다.
   if (workInProgressHook === null) {
-    // This is the first hook in the list
+    // 첫 번째 훅인 경우 현재 렌더링 중인 컴포넌트의 memoizedState에 설정합니다.
+    // workInProgressHook 포인터도 새로 생성한 훅을 가리키도록 설정합니다.
+    // 맨 처음 실행되는 훅인 경우 연결 리스트의 head로 잡아둠
     currentlyRenderingFiber.memoizedState = workInProgressHook = hook;
   } else {
-    // Append to the end of the list
+    // 두번 째부터는 연결 리스트에 추가
+    // 첫 번째 훅이 아닌 경우, 기존 훅 목록의 끝에 새로운 훅을 추가합니다.
+    // workInProgressHook의 next 속성을 새로운 훅으로 설정합니다.
     workInProgressHook = workInProgressHook.next = hook;
   }
+
+  // 현재 렌더링 중인 훅을 반환합니다.
   return workInProgressHook;
 }
 
@@ -1880,26 +1909,49 @@ function mountStateImpl<S>(initialState: (() => S) | S): Hook {
   return hook;
 }
 
+/**
+ * 훅을 사용하여 상태를 마운트합니다.
+ *
+ * @param initialState - 상태의 초기값. 함수가 제공되면, 이 함수가 호출되어 초기 상태를 설정합니다.
+ * @returns 상태와 상태 업데이트를 위한 디스패처를 포함하는 배열
+ */
 function mountState<S>(
   initialState: (() => S) | S,
 ): [S, Dispatch<BasicStateAction<S>>] {
+  // 상태를 초기화하는 내부 함수 호출
   const hook = mountStateImpl(initialState);
+
+  // 상태 업데이트 큐를 가져옵니다.
   const queue = hook.queue;
+
+  // 상태 업데이트를 위한 디스패처 함수 생성
+  // `dispatchSetState` 함수에 현재 렌더링 중인 Fiber와 큐를 바인딩하여 디스패처를 생성합니다.
+  // 디스패처는 상태를 업데이트하는 데 사용됩니다.
   const dispatch: Dispatch<BasicStateAction<S>> = (dispatchSetState.bind(
     null,
     currentlyRenderingFiber,
     queue,
   ): any);
+
+  // 디스패처를 큐에 할당
   queue.dispatch = dispatch;
+
+  // 현재 상태와 상태 업데이트 함수(디스패처)를 반환합니다.
   return [hook.memoizedState, dispatch];
 }
 
+/**
+ * 상태를 업데이트하는 훅을 정의합니다.
+ *
+ * @param initialState - 상태의 초기값. 함수가 제공되면, 이 함수가 호출되어 초기 상태를 설정합니다.
+ * @returns 상태와 상태 업데이트를 위한 디스패처를 포함하는 배열
+ */
 function updateState<S>(
   initialState: (() => S) | S,
 ): [S, Dispatch<BasicStateAction<S>>] {
+  // 상태를 업데이트하기 위해 기본 상태 리듀서를 사용하여 상태와 디스패처를 반환합니다.
   return updateReducer(basicStateReducer, initialState);
 }
-
 function rerenderState<S>(
   initialState: (() => S) | S,
 ): [S, Dispatch<BasicStateAction<S>>] {
@@ -3385,11 +3437,13 @@ function refreshCache<T>(fiber: Fiber, seedKey: ?() => T, seedValue: T): void {
   // TODO: Warn if unmounted?
 }
 
+//  queue에 update를 push함과 동시에 scheduler에게 Work를 예약하는 함수입니다.
 function dispatchReducerAction<S, A>(
-  fiber: Fiber,
-  queue: UpdateQueue<S, A>,
-  action: A,
+  fiber: Fiber, // 현재 렌더링 중인 컴포넌트의 fiber 노드
+  queue: UpdateQueue<S, A>, // 상태 업데이트를 저장하는 큐
+  action: A, // 상태를 변경하는 액션
 ): void {
+  // 개발 모드에서 useState()나 useReducer() 훅에서 두 번째 콜백 인자를 사용하는 경우 오류 메시지 출력
   if (__DEV__) {
     if (typeof arguments[3] === 'function') {
       console.error(
@@ -3400,35 +3454,49 @@ function dispatchReducerAction<S, A>(
     }
   }
 
+  // 업데이트에 사용할 lane을 요청합니다.
   const lane = requestUpdateLane(fiber);
 
+  // 새로운 상태 업데이트 객체를 생성합니다.
   const update: Update<S, A> = {
-    lane,
-    revertLane: NoLane,
-    action,
-    hasEagerState: false,
-    eagerState: null,
-    next: (null: any),
+    lane, // 업데이트가 처리될 lane
+    revertLane: NoLane, // 업데이트가 revert될 때 사용할 lane
+    action, // 전달받은 action
+    hasEagerState: false, // eager state가 있는지 여부
+    eagerState: null, // eager state (사전에 계산된 상태)
+    next: (null: any), // 업데이트 목록에서 다음 업데이트
   };
 
+  // 렌더링 중 업데이트가 발생했는지 확인합니다.
   if (isRenderPhaseUpdate(fiber)) {
-    enqueueRenderPhaseUpdate(queue, update);
+    enqueueRenderPhaseUpdate(queue, update); // 렌더링 단계에서 업데이트를 큐에 추가
   } else {
+    // 큐에 업데이트를 추가하고, 루트를 가져옵니다.
     const root = enqueueConcurrentHookUpdate(fiber, queue, update, lane);
     if (root !== null) {
+      // 루트가 존재하면 해당 fiber에 업데이트를 스케줄링하고 전이를 얽힙니다.
       scheduleUpdateOnFiber(root, fiber, lane);
       entangleTransitionUpdate(root, queue, lane);
     }
   }
 
+  // 개발 도구에 업데이트 마킹
   markUpdateInDevTools(fiber, lane, action);
 }
 
+/**
+ * 상태 업데이트를 처리하는 함수로, `useState`나 `useReducer` 훅의 상태 변경 요청을 처리합니다.
+ *
+ * @param fiber 현재 렌더링 중인 컴포넌트의 fiber 노드
+ * @param queue 상태 업데이트를 저장하는 큐
+ * @param action 상태를 변경하는 액션
+ */
 function dispatchSetState<S, A>(
   fiber: Fiber,
   queue: UpdateQueue<S, A>,
   action: A,
 ): void {
+  // 개발 모드에서 useState()나 useReducer() 훅에서 두 번째 콜백 인자를 사용하는 경우 오류 메시지 출력
   if (__DEV__) {
     if (typeof arguments[3] === 'function') {
       console.error(
@@ -3439,70 +3507,74 @@ function dispatchSetState<S, A>(
     }
   }
 
+  // 업데이트에 사용할 lane을 요청합니다.
   const lane = requestUpdateLane(fiber);
 
+  // 새로운 상태 업데이트 객체를 생성합니다.
   const update: Update<S, A> = {
-    lane,
-    revertLane: NoLane,
-    action,
-    hasEagerState: false,
-    eagerState: null,
-    next: (null: any),
+    lane, // 업데이트가 처리될 lane
+    revertLane: NoLane, // 업데이트가 revert될 때 사용할 lane
+    action, // 전달받은 action
+    hasEagerState: false, // eager state가 있는지 여부
+    eagerState: null, // eager state (사전에 계산된 상태)
+    next: (null: any), // 업데이트 목록에서 다음 업데이트
   };
 
+  // 렌더링 중 업데이트가 발생했는지 확인합니다.
   if (isRenderPhaseUpdate(fiber)) {
-    enqueueRenderPhaseUpdate(queue, update);
+    enqueueRenderPhaseUpdate(queue, update); // 렌더링 단계에서 업데이트를 큐에 추가
   } else {
     const alternate = fiber.alternate;
+
+    // 큐가 비어있는 경우, eager하게 상태를 미리 계산할 수 있습니다.
+    // 계산된 상태가 현재 상태와 동일하면, 재렌더링을 건너뛸 수 있습니다.
     if (
       fiber.lanes === NoLanes &&
       (alternate === null || alternate.lanes === NoLanes)
     ) {
-      // The queue is currently empty, which means we can eagerly compute the
-      // next state before entering the render phase. If the new state is the
-      // same as the current state, we may be able to bail out entirely.
       const lastRenderedReducer = queue.lastRenderedReducer;
       if (lastRenderedReducer !== null) {
         let prevDispatcher = null;
         if (__DEV__) {
+          // 개발 모드에서 잘못된 훅 호출을 방지하기 위해 Dispatcher를 임시로 교체
           prevDispatcher = ReactSharedInternals.H;
           ReactSharedInternals.H = InvalidNestedHooksDispatcherOnUpdateInDEV;
         }
         try {
+          // 현재 상태를 가져와 액션을 사용해 새로운 상태를 미리 계산 (eager state)
           const currentState: S = (queue.lastRenderedState: any);
           const eagerState = lastRenderedReducer(currentState, action);
-          // Stash the eagerly computed state, and the reducer used to compute
-          // it, on the update object. If the reducer hasn't changed by the
-          // time we enter the render phase, then the eager state can be used
-          // without calling the reducer again.
+
+          // 미리 계산된 상태를 업데이트 객체에 저장
           update.hasEagerState = true;
           update.eagerState = eagerState;
+
+          // 새로운 상태가 현재 상태와 동일하면, 렌더링을 건너뜁니다.
           if (is(eagerState, currentState)) {
-            // Fast path. We can bail out without scheduling React to re-render.
-            // It's still possible that we'll need to rebase this update later,
-            // if the component re-renders for a different reason and by that
-            // time the reducer has changed.
-            // TODO: Do we still need to entangle transitions in this case?
             enqueueConcurrentHookUpdateAndEagerlyBailout(fiber, queue, update);
             return;
           }
         } catch (error) {
-          // Suppress the error. It will throw again in the render phase.
+          // 에러를 억제하고, 렌더링 단계에서 다시 발생하게 합니다.
         } finally {
           if (__DEV__) {
+            // Dispatcher를 원래대로 복구
             ReactSharedInternals.H = prevDispatcher;
           }
         }
       }
     }
 
+    // 큐에 업데이트를 추가하고, 루트를 가져옵니다.
     const root = enqueueConcurrentHookUpdate(fiber, queue, update, lane);
     if (root !== null) {
-      scheduleUpdateOnFiber(root, fiber, lane);
+      // 루트가 존재하면 해당 fiber에 업데이트를 스케줄링하고 전이를 얽힙니다.
+      scheduleUpdateOnFiber(root, fiber, lane); // 해당 함수로 우선순위를 스케줄하는 듯?
       entangleTransitionUpdate(root, queue, lane);
     }
   }
 
+  // 개발 도구에 업데이트 마킹
   markUpdateInDevTools(fiber, lane, action);
 }
 
