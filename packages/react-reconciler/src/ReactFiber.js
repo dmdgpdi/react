@@ -135,86 +135,44 @@ if (__DEV__) {
 
 function FiberNode(
   this: $FlowFixMe,
-  tag: WorkTag,
-  pendingProps: mixed,
-  key: null | string,
-  mode: TypeOfMode,
+  tag: WorkTag, // Fiber의 태그로, 이 Fiber가 어떤 종류인지 나타냄 (예: 함수형 컴포넌트, 클래스형 컴포넌트 등)
+  pendingProps: mixed, // 현재 작업 중인 props, 아직 완료되지 않은 상태에서 관리
+  key: null | string, // 고유 식별자로, 리스트 렌더링 시 각 노드를 구분할 때 사용
+  mode: TypeOfMode, // Fiber의 모드, 주로 StrictMode나 Concurrent 모드를 나타냄
 ) {
   // Instance
-  this.tag = tag;
+  this.tag = tag; // fiber의 종류를 나타냄
   this.key = key;
-  this.elementType = null;
-  this.type = null;
-  this.stateNode = null;
+  this.elementType = null; // React element의 타입 (함수형 컴포넌트, 클래스형 컴포넌트, DOM element 등)
+  this.type = null; // 추후에 React element의 type을 저장
+  this.stateNode = null; // 호스트 컴포넌트에 대응되는 HTML element를 저장
 
   // Fiber
-  this.return = null;
-  this.child = null;
-  this.sibling = null;
-  this.index = 0;
+  this.return = null; // 부모 fiber
+  this.child = null; // 자식 fiber
+  this.sibling = null; // 형제 fiber
+  this.index = 0; // 형제들 사이에서의 자신의 위치
 
-  this.ref = null;
-  this.refCleanup = null;
+  this.ref = null; // DOM 요소에 대한 참조 (ref)
+  this.refCleanup = null; // 참조(ref)가 삭제될 때 실행될 정리 함수
 
-  this.pendingProps = pendingProps;
-  this.memoizedProps = null;
-  this.updateQueue = null;
-  this.memoizedState = null;
-  this.dependencies = null;
+  this.pendingProps = pendingProps; // workInProgress는 아직 작업이 끝난 상태가 아니므로 props를 pending으로 관리
+  this.memoizedProps = null; // Render phase가 끝나면 pendingProps는 memoizedProps로 관리
+  this.updateQueue = null; // 컴포넌트 종류에 따라 element의 변경점 또는 라이프사이클을 저장
+  this.memoizedState = null; // 함수형 컴포넌트는 훅을 통해 상태를 관리하므로 hook 리스트가 저장된다.
+  this.dependencies = null; // Fiber의 외부 상태나 context에 대한 의존성 목록
 
-  this.mode = mode;
+  this.mode = mode; // 이 Fiber 노드가 속한 모드를 나타냄 (StrictMode, ConcurrentMode 등)
 
   // Effects
-  this.flags = NoFlags;
-  this.subtreeFlags = NoFlags;
-  this.deletions = null;
+  this.flags = NoFlags; // 어떤 작업을 수행해야 하는지, 또는 어떤 상태에 있는지를 나타내는 플래그?
+  this.subtreeFlags = NoFlags; // 하위 트리에서 발생한 효과를 나타내는 플래그
+  this.deletions = null; // 삭제될 Fiber 노드 목록
 
-  this.lanes = NoLanes;
-  this.childLanes = NoLanes;
+  this.lanes = NoLanes; // 이 Fiber가 속한 레인. 레인은 우선 순위 작업을 관리하기 위한 시스템
+  this.childLanes = NoLanes; // 하위 트리에서 사용되는 레인들
 
-  this.alternate = null;
-
-  if (enableProfilerTimer) {
-    // Note: The following is done to avoid a v8 performance cliff.
-    //
-    // Initializing the fields below to smis and later updating them with
-    // double values will cause Fibers to end up having separate shapes.
-    // This behavior/bug has something to do with Object.preventExtension().
-    // Fortunately this only impacts DEV builds.
-    // Unfortunately it makes React unusably slow for some applications.
-    // To work around this, initialize the fields below with doubles.
-    //
-    // Learn more about this here:
-    // https://github.com/facebook/react/issues/14365
-    // https://bugs.chromium.org/p/v8/issues/detail?id=8538
-    this.actualDuration = Number.NaN;
-    this.actualStartTime = Number.NaN;
-    this.selfBaseDuration = Number.NaN;
-    this.treeBaseDuration = Number.NaN;
-
-    // It's okay to replace the initial doubles with smis after initialization.
-    // This won't trigger the performance cliff mentioned above,
-    // and it simplifies other profiler code (including DevTools).
-    this.actualDuration = 0;
-    this.actualStartTime = -1;
-    this.selfBaseDuration = 0;
-    this.treeBaseDuration = 0;
-  }
-
-  if (__DEV__) {
-    // This isn't directly used but is handy for debugging internals:
-    this._debugInfo = null;
-    this._debugOwner = null;
-    if (enableOwnerStacks) {
-      this._debugStack = null;
-      this._debugTask = null;
-    }
-    this._debugNeedsRemount = false;
-    this._debugHookTypes = null;
-    if (!hasBadMapPolyfill && typeof Object.preventExtensions === 'function') {
-      Object.preventExtensions(this);
-    }
-  }
+  this.alternate = null; // 현재 작업 중인 Fiber의 대체 노드 (기존 상태를 유지하기 위한 구조)
 }
 
 // This is a constructor function, rather than a POJO constructor, still
