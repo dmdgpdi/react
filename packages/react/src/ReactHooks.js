@@ -28,6 +28,8 @@ type BasicStateAction<S> = (S => S) | S;
 type Dispatch<A> = A => void;
 
 function resolveDispatcher() {
+  // React의 내부에서 현재 사용 중인 Dispatcher를 가져옴.
+  // Dispatcher는 Hook 로직을 관리하는 객체로, 함수형 컴포넌트 내에서 사용되는 상태 관리 로직이 담겨있음.
   const dispatcher = ReactSharedInternals.H;
   if (__DEV__) {
     if (dispatcher === null) {
@@ -41,9 +43,9 @@ function resolveDispatcher() {
       );
     }
   }
-  // Will result in a null access error if accessed outside render phase. We
-  // intentionally don't throw our own error because this is in a hot path.
-  // Also helps ensure this is inlined.
+
+  // render phase 이외에 접근하려고 할 경우 null 액세스 오류가 발생함.
+  // 의도적으로 직접 오류를 던지지 않고 있으며, 이는 성능에 영향을 미치지 않도록 하기 위함임.
   return ((dispatcher: any): Dispatcher);
 }
 
